@@ -1,0 +1,117 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZPL Label Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans h-screen flex flex-col">
+
+    <header class="bg-slate-800 text-white p-4 shadow-md">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-semibold tracking-wide">ZPL Label Generator</h1>
+        </div>
+    </header>
+
+    <main class="flex-grow p-6 max-w-4xl mx-auto w-full flex flex-col gap-6">
+        
+        <div class="flex flex-col bg-white p-4 rounded-lg shadow border border-gray-200 flex-grow">
+            <label for="excelData" class="text-sm font-semibold text-gray-600 mb-2 uppercase tracking-wider">Paste Excel Data</label>
+            <textarea id="excelData" class="w-full flex-grow p-4 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none whitespace-pre" placeholder="Copy rows directly from Excel and paste here...&#10;(Make sure the first row contains your headers: MacAddress, SN_Last5, SerialNumber, ID)"></textarea>
+        </div>
+
+        <div class="flex justify-between items-center bg-white p-4 rounded-lg shadow border border-gray-200">
+            <div id="statusMessage" class="text-sm text-gray-500 font-medium">Ready to generate.</div>
+            <button onclick="generateZPL()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded shadow transition duration-200 ease-in-out">
+                Generate & Download ZPL
+            </button>
+        </div>
+
+    </main>
+
+    <script>
+        // The ZPL Template is now safely hardcoded behind the scenes
+        const zplTemplate = `^XA
+
+^FX --- MAC Address (Bottom Line) ---
+^FT4,760^A0N,157,88^FH\\^FDMAC: [MacAddress]^FS
+
+^FX --- Big SN Last 5 (Top Line) ---
+^FT20,215^A0N,203,283^FH\\^FD[SN_Last5]^FS
+
+^FX --- Serial Number (Third Line) ---
+^FT10,584^A0N,138,100^FH\\^FDSN: [SerialNumber]^FS
+
+^FX --- ID (Second Line) ---
+^FT32,414^A0N,140,182^FH\\^FD[ID]^FS
+
+^PQ1,0,1,Y^XZ`;
+
+        function generateZPL() {
+            const excelData = document.getElementById('excelData').value.trim();
+            const statusMessage = document.getElementById('statusMessage');
+
+            if (!excelData) {
+                statusMessage.innerHTML = "<span class='text-red-500'>Error: Please paste your Excel data first.</span>";
+                return;
+            }
+
+            // Split the pasted data by newlines to get rows
+            const rows = excelData.split('\n');
+            
+            // Excel uses tabs (\t) to separate columns when pasted
+            const headers = rows[0].split('\t').map(h => h.trim());
+            let finalZpl = "";
+            let counter = 0;
+
+            // Loop through the data rows (skipping the header row at index 0)
+            for (let i = 1; i < rows.length; i++) {
+                let rowCols = rows[i].split('\t');
+                
+                // Skip empty lines or lines that don't match header count
+                if (rowCols.length < headers.length || rowCols.join('').trim() === '') continue; 
+                
+                let currentLabel = zplTemplate;
+                
+                // Replace each header placeholder with the column value
+                for (let j = 0; j < headers.length; j++) {
+                    // Using regex with 'gi' to make the replacement case-insensitive globally
+                    let placeholderRegex = new RegExp(`\\[${headers[j]}\\]`, 'gi');
+                    currentLabel = currentLabel.replace(placeholderRegex, rowCols[j].trim());
+                }
+                
+                finalZpl += currentLabel + "\r\n";
+                counter++;
+            }
+
+            if (counter === 0) {
+                statusMessage.innerHTML = "<span class='text-red-500'>Error: No valid data rows found to process. Check your headers.</span>";
+                return;
+            }
+
+            // Trigger the download
+            downloadFile(finalZpl, 'final_print_job.zpl');
+            
+            statusMessage.innerHTML = `<span class='text-green-600'>Success! Generated and downloaded ${counter} labels.</span>`;
+            
+            // Optional: Clear the text area after successful generation
+            // document.getElementById('excelData').value = ''; 
+        }
+
+        function downloadFile(content, filename) {
+            // Blob forces ASCII encoding by default for standard text
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
