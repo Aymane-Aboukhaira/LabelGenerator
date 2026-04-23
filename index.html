@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,16 +9,35 @@
 <body class="bg-gray-50 text-gray-800 font-sans h-screen flex flex-col">
 
     <header class="bg-slate-800 text-white p-4 shadow-md">
-        <div class="max-w-4xl mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-semibold tracking-wide">ZPL Label Generator</h1>
+        <div class="max-w-5xl mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-semibold tracking-wide">ZPL Label Generator (Auto MAC-5)</h1>
         </div>
     </header>
 
-    <main class="flex-grow p-6 max-w-4xl mx-auto w-full flex flex-col gap-6">
+    <main class="flex-grow p-6 max-w-5xl mx-auto w-full flex flex-col gap-6">
         
-        <div class="flex flex-col bg-white p-4 rounded-lg shadow border border-gray-200 flex-grow">
-            <label for="excelData" class="text-sm font-semibold text-gray-600 mb-2 uppercase tracking-wider">Paste Excel Data</label>
-            <textarea id="excelData" class="w-full flex-grow p-4 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none whitespace-pre" placeholder="Copy rows directly from Excel and paste here...&#10;(Make sure the first row contains your headers: MacAddress, SN_Last5, SerialNumber, ID)"></textarea>
+        <div class="bg-blue-50 text-blue-800 p-4 rounded border border-blue-200 text-sm">
+            <strong>Instructions:</strong> Copy the data directly from your Excel columns and paste them into the corresponding boxes below. <strong>Do not include the header row.</strong> <br>
+            <em>Note: The big top line is now generated automatically from the last 5 characters of the MAC Address.</em>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 flex-grow">
+            
+            <div class="flex flex-col bg-white p-3 rounded-lg shadow border border-gray-200">
+                <label for="colMac" class="text-sm font-semibold text-gray-700 mb-2">1. MAC Addresses</label>
+                <textarea id="colMac" class="w-full flex-grow p-3 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none whitespace-pre" placeholder="Paste MAC Address column here..."></textarea>
+            </div>
+
+            <div class="flex flex-col bg-white p-3 rounded-lg shadow border border-gray-200">
+                <label for="colSn" class="text-sm font-semibold text-gray-700 mb-2">2. Full Serial Numbers</label>
+                <textarea id="colSn" class="w-full flex-grow p-3 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none whitespace-pre" placeholder="Paste Full Serial Number column here..."></textarea>
+            </div>
+
+            <div class="flex flex-col bg-white p-3 rounded-lg shadow border border-gray-200">
+                <label for="colId" class="text-sm font-semibold text-gray-700 mb-2">3. IDs</label>
+                <textarea id="colId" class="w-full flex-grow p-3 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none whitespace-pre" placeholder="Paste ID column here..."></textarea>
+            </div>
+
         </div>
 
         <div class="flex justify-between items-center bg-white p-4 rounded-lg shadow border border-gray-200">
@@ -32,14 +50,14 @@
     </main>
 
     <script>
-        // The ZPL Template is now safely hardcoded behind the scenes
+        // The hardcoded ZPL Template
         const zplTemplate = `^XA
 
 ^FX --- MAC Address (Bottom Line) ---
 ^FT4,760^A0N,157,88^FH\\^FDMAC: [MacAddress]^FS
 
-^FX --- Big SN Last 5 (Top Line) ---
-^FT20,215^A0N,203,283^FH\\^FD[SN_Last5]^FS
+^FX --- Big Last 5 (Top Line) ---
+^FT20,215^A0N,203,283^FH\\^FD[MAC_Last5]^FS
 
 ^FX --- Serial Number (Third Line) ---
 ^FT10,584^A0N,138,100^FH\\^FDSN: [SerialNumber]^FS
@@ -50,44 +68,56 @@
 ^PQ1,0,1,Y^XZ`;
 
         function generateZPL() {
-            const excelData = document.getElementById('excelData').value.trim();
             const statusMessage = document.getElementById('statusMessage');
 
-            if (!excelData) {
-                statusMessage.innerHTML = "<span class='text-red-500'>Error: Please paste your Excel data first.</span>";
+            // Grab the data from each box and split it into arrays by line breaks
+            const getLines = (id) => document.getElementById(id).value.trim().split('\n').map(line => line.trim());
+
+            const macs = getLines('colMac');
+            const sns = getLines('colSn');
+            const ids = getLines('colId');
+
+            // Check if at least one box has data
+            if (macs[0] === "" && sns[0] === "" && ids[0] === "") {
+                statusMessage.innerHTML = "<span class='text-red-500'>Error: Please paste data into the boxes.</span>";
                 return;
             }
 
-            // Split the pasted data by newlines to get rows
-            const rows = excelData.split('\n');
-            
-            // Excel uses tabs (\t) to separate columns when pasted
-            const headers = rows[0].split('\t').map(h => h.trim());
+            // Find the maximum number of rows among all pasted columns
+            const maxRows = Math.max(macs.length, sns.length, ids.length);
             let finalZpl = "";
             let counter = 0;
 
-            // Loop through the data rows (skipping the header row at index 0)
-            for (let i = 1; i < rows.length; i++) {
-                let rowCols = rows[i].split('\t');
-                
-                // Skip empty lines or lines that don't match header count
-                if (rowCols.length < headers.length || rowCols.join('').trim() === '') continue; 
-                
+            // Loop through row by row
+            for (let i = 0; i < maxRows; i++) {
                 let currentLabel = zplTemplate;
+
+                // Safely get the value for the current row, defaulting to empty string if a column is shorter
+                let mac = macs[i] || "";
+                let sn = sns[i] || "";
+                let id = ids[i] || "";
+
+                // Skip completely empty rows
+                if (!mac && !sn && !id) continue;
+
+                // Remove any colons or dashes from the MAC address so we only count alphanumeric characters
+                let cleanMac = mac.replace(/[^a-zA-Z0-9]/g, '');
                 
-                // Replace each header placeholder with the column value
-                for (let j = 0; j < headers.length; j++) {
-                    // Using regex with 'gi' to make the replacement case-insensitive globally
-                    let placeholderRegex = new RegExp(`\\[${headers[j]}\\]`, 'gi');
-                    currentLabel = currentLabel.replace(placeholderRegex, rowCols[j].trim());
-                }
+                // Automatically extract the last 5 characters of the cleaned MAC address and ensure uppercase
+                let macLast5 = cleanMac.length >= 5 ? cleanMac.slice(-5).toUpperCase() : cleanMac.toUpperCase();
+
+                // Replace the placeholders (using regex 'gi' to be case-insensitive)
+                currentLabel = currentLabel.replace(/\[MacAddress\]/gi, mac); // Keeps original formatting for the bottom line
+                currentLabel = currentLabel.replace(/\[MAC_Last5\]/gi, macLast5); // Injects the extracted 5 characters for the top line
+                currentLabel = currentLabel.replace(/\[SerialNumber\]/gi, sn);
+                currentLabel = currentLabel.replace(/\[ID\]/gi, id);
                 
                 finalZpl += currentLabel + "\r\n";
                 counter++;
             }
 
             if (counter === 0) {
-                statusMessage.innerHTML = "<span class='text-red-500'>Error: No valid data rows found to process. Check your headers.</span>";
+                statusMessage.innerHTML = "<span class='text-red-500'>Error: No valid data rows found to process.</span>";
                 return;
             }
 
@@ -95,13 +125,9 @@
             downloadFile(finalZpl, 'final_print_job.zpl');
             
             statusMessage.innerHTML = `<span class='text-green-600'>Success! Generated and downloaded ${counter} labels.</span>`;
-            
-            // Optional: Clear the text area after successful generation
-            // document.getElementById('excelData').value = ''; 
         }
 
         function downloadFile(content, filename) {
-            // Blob forces ASCII encoding by default for standard text
             const blob = new Blob([content], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
