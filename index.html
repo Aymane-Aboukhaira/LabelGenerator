@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -48,6 +49,10 @@
         </div>
 
     </main>
+
+    <footer class="py-4 text-center text-sm text-gray-400">
+        Made by <a href="https://www.linkedin.com/in/aboukhaira/" target="_blank" rel="noopener noreferrer" class="font-medium text-blue-500 hover:text-blue-700 hover:underline transition-colors duration-200">Aymane Aboukhaira</a>
+    </footer>
 
     <script>
         // The hardcoded ZPL Template
@@ -107,8 +112,8 @@
                 let macLast5 = cleanMac.length >= 5 ? cleanMac.slice(-5).toUpperCase() : cleanMac.toUpperCase();
 
                 // Replace the placeholders (using regex 'gi' to be case-insensitive)
-                currentLabel = currentLabel.replace(/\[MacAddress\]/gi, mac); // Keeps original formatting for the bottom line
-                currentLabel = currentLabel.replace(/\[MAC_Last5\]/gi, macLast5); // Injects the extracted 5 characters for the top line
+                currentLabel = currentLabel.replace(/\[MacAddress\]/gi, mac); 
+                currentLabel = currentLabel.replace(/\[MAC_Last5\]/gi, macLast5); 
                 currentLabel = currentLabel.replace(/\[SerialNumber\]/gi, sn);
                 currentLabel = currentLabel.replace(/\[ID\]/gi, id);
                 
